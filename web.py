@@ -43,14 +43,13 @@ st.sidebar.header("📂 Upload PDF Documents")
 
 # File uploader
 uploaded_files = st.sidebar.file_uploader("Choose PDFs", type=["pdf"], accept_multiple_files=True)
-pdf_files = []
 if uploaded_files:
+    pdf_files = [uploaded_file.name for uploaded_file in uploaded_files]
     for uploaded_file in uploaded_files:
-        file_path = os.path.join("uploads", uploaded_file.name)
-        pdf_files.append(file_path)
-        os.makedirs("uploads", exist_ok=True)
-        with open(file_path, "wb") as f:
+        with open(uploaded_file.name, "wb") as f:
             f.write(uploaded_file.getbuffer())
+else:
+    pdf_files = []
 
 # Load documents
 documents = []
@@ -87,7 +86,7 @@ vector_store = FAISS(
 )
 retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
 
-# Initialize session state for responses
+# Initialize session state to store responses
 if "responses" not in st.session_state:
     st.session_state.responses = []
 
@@ -95,14 +94,16 @@ if "responses" not in st.session_state:
 st.header("💡 Ask a Question")
 question = st.text_input("Enter your question:")
 if st.button("Ask"):
-    if question:
+    if not question:
+        st.write("Please enter a question.")
+    else:
         retrieved_docs = retriever.get_relevant_documents(question)
         if retrieved_docs:
             st.success("✅ Here’s what we found:")
             for doc in retrieved_docs:
                 st.markdown(f"**📄 Document:** {doc.page_content[:300]}...")
             
-            # Store response in session state
+            # Store question and answer
             st.session_state.responses.append({
                 "question": question,
                 "answers": [doc.page_content[:300] for doc in retrieved_docs]
@@ -110,19 +111,20 @@ if st.button("Ask"):
         else:
             st.warning("❌ No relevant information found.")
 
-# End button to download responses
+# Display stored responses
+if st.session_state.responses:
+    st.write("### Stored Responses")
+    st.json(st.session_state.responses)
+
+# End button to download responses as JSON
 if st.button("End"):
     if st.session_state.responses:
         json_str = json.dumps(st.session_state.responses, indent=2)
         st.download_button(
             label="Download Responses as JSON",
             data=json_str,
-            file_name="responses.json",
+            file_name="chatbot_responses.json",
             mime="application/json"
         )
     else:
         st.write("No responses to download yet.")
-
-# Footer
-st.markdown("---")
-st.markdown("💡 Created by [st125496](https://github.com/Laiba45362) ✨")
