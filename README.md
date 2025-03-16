@@ -23,7 +23,7 @@ Set the Hugging Face API Token in your environment:
 
 ```python
 import os
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = "<your_huggingface_api_token>"
+os.environ["HUGGINGFACEHUB_API_TOKEN"] = "<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>"
 ```
 
 ## Code Workflow
