@@ -1,5 +1,4 @@
 
-```markdown
 # AI Chatbot with FAISS and LangChain
 **Deployment Link:** [Your Streamlit App](https://nlpst125496a6-nrf7qrhoh52ythv34a2c6x.streamlit.app/) 🚀
 ## Overview
