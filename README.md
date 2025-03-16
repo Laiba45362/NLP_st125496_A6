@@ -1,7 +1,7 @@
 
 ```markdown
 # AI Chatbot with FAISS and LangChain
-
+**Deployment Link:** [Your Streamlit App](https://nlpst125496a6-nrf7qrhoh52ythv34a2c6x.streamlit.app/) 🚀
 ## Overview
 This project demonstrates how to build an AI chatbot that uses FAISS (Facebook AI Similarity Search) for document indexing and LangChain for question-answering based on personal documents like PDFs. It integrates multiple language models from Hugging Face (Flan-T5 and GPT-2) and a potential Groq Cloud Llama LLM, with Streamlit for creating a user interface.
 
@@ -23,7 +23,7 @@ Set the Hugging Face API Token in your environment:
 
 ```python
 import os
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
+os.environ["HUGGINGFACEHUB_API_TOKEN"] = "---------------"
 ```
 
 ## Code Workflow
