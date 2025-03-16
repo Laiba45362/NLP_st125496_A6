@@ -1,4 +1,4 @@
-treamlit
+streamlit
 langchain
 langchain-community
 pypdf
