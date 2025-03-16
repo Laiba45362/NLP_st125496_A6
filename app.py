@@ -1,112 +1,82 @@
 import streamlit as st
 import os
-import faiss
-import numpy as np
-from langchain_community.vectorstores import FAISS
+import json
+from langchain.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader
+from langchain.document_loaders import PyPDFLoader
 from langchain.chains import RetrievalQA
-from sentence_transformers import SentenceTransformer
-from langchain.storage import InMemoryStore
-from langchain.schema import Document
+from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.llms import HuggingFaceHub
-from langchain.retrievers import BM25Retriever
-from transformers import pipeline
 
-# Set up environment variables
+# Set the Hugging Face API Token
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
 
-# Load Hugging Face API Token
-hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
-if hf_token is None:
-    raise ValueError("HUGGINGFACEHUB_API_TOKEN is not set. Please set it in your environment variables.")
-
-# Initialize Hugging Face LLM
-hf_llm = HuggingFaceHub(
+# Load the Hugging Face model
+llm = HuggingFaceHub(
     repo_id="google/flan-t5-large",
-    huggingfacehub_api_token=hf_token,
+    huggingfacehub_api_token=os.environ["HUGGINGFACEHUB_API_TOKEN"],
     model_kwargs={"temperature": 0.7, "max_length": 512}
 )
 
-# Define FAISS index file path
-INDEX_PATH = "faiss_index.bin"
-
-# Initialize embedding model
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-
 # Streamlit UI setup
 st.set_page_config(page_title="📜 AI Document Search", layout="wide")
-st.markdown("""
-    <style>
-        body { background-color: #f4f4f4; }
-        .stButton > button { background-color: #4CAF50; color: white; }
-    </style>
-""", unsafe_allow_html=True)
-
 st.title("🔍 AI-Powered Document Search")
 st.markdown("Find answers in your documents with AI!")
 
-# Sidebar for settings
-st.sidebar.title("⚙️ Settings")
-st.sidebar.header("📂 Upload PDF Documents")
-
-# File uploader
+# Sidebar for file upload
+st.sidebar.title("⚙️ Upload PDF Documents")
 uploaded_files = st.sidebar.file_uploader("Choose PDFs", type=["pdf"], accept_multiple_files=True)
-if uploaded_files:
-    pdf_files = [uploaded_file.name for uploaded_file in uploaded_files]
+
+# Load and process PDFs
+@st.cache_resource
+def load_vector_store(uploaded_files):
+    if not uploaded_files:
+        return None
+    
+    documents = []
     for uploaded_file in uploaded_files:
         with open(uploaded_file.name, "wb") as f:
             f.write(uploaded_file.getbuffer())
-else:
-    pdf_files = []
-
-# Load documents
-documents = []
-for pdf_file in pdf_files:
-    if os.path.exists(pdf_file):
-        loader = PyPDFLoader(pdf_file)
+        loader = PyPDFLoader(uploaded_file.name)
         documents.extend(loader.load())
+    
+    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    text_chunks = text_splitter.split_documents(documents)
+    
+    embedding_model = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+    vector_store = FAISS.from_documents(text_chunks, embedding_model)
+    return vector_store
 
-# Split documents into chunks
-text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-text_chunks = text_splitter.split_documents(documents)
+vector_store = load_vector_store(uploaded_files)
 
-# Convert text to embeddings
-texts = [doc.page_content for doc in text_chunks]
-embeddings = embedding_model.encode(texts, convert_to_tensor=False)
-embedding_matrix = np.array(embeddings).astype("float32")
+# Initialize RetrievalQA
+qa_chain = None
+if vector_store:
+    retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=retriever,
+        return_source_documents=True
+    )
 
-# Initialize FAISS index
-if os.path.exists(INDEX_PATH):
-    index = faiss.read_index(INDEX_PATH)
-    st.sidebar.success("✅ FAISS index loaded from disk.")
-else:
-    index = faiss.IndexFlatL2(embedding_matrix.shape[1])
-    index.add(embedding_matrix)
-    faiss.write_index(index, INDEX_PATH)
-    st.sidebar.success("✅ FAISS index created.")
-
-# Setup Retriever
-vector_store = FAISS(
-    embedding_function=embedding_model.encode,
-    index=index,
-    docstore=InMemoryStore(),
-    index_to_docstore_id={str(i): str(i) for i in range(len(text_chunks))}
-)
-retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
-
-# Question Answering UI
+# Ask a question
 st.header("💡 Ask a Question")
 question = st.text_input("Enter your question:")
-if question:
-    retrieved_docs = retriever.get_relevant_documents(question)
-    if retrieved_docs:
-        st.success("✅ Here’s what we found:")
-        for doc in retrieved_docs:
-            st.markdown(f"**📄 Document:** {doc.page_content[:300]}...")
+if st.button("Ask"):
+    if not question:
+        st.warning("Please enter a question.")
+    elif not vector_store or not qa_chain:
+        st.error("No document data available. Upload PDFs first.")
     else:
-        st.warning("❌ No relevant information found.")
-
-# Footer
-st.markdown("---")
-st.markdown("💡 Created by [st125496](https://github.com/Laiba45362) ✨")
+        try:
+            response = qa_chain.invoke({"query": question})
+            answer = response["result"]
+            source_docs = response["source_documents"]
+            st.success("✅ Answer:")
+            st.write(answer)
+            st.write("**Source Documents:**")
+            for i, doc in enumerate(source_docs, 1):
+                st.write(f"**Document {i}:** {doc.page_content[:200]}...")
+        except Exception as e:
+            st.error(f"Error processing question: {str(e)}")
