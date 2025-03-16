@@ -81,11 +81,8 @@ streamlit run app.py
 - **Model Responses**: Ensure that the prompt design is clear and contextually informative to avoid generating irrelevant responses.
 
 ## Reference Documents
-- Example PDF files are used to demonstrate the chatbot's functionality. You can replace these with your own documents.
+- Example PDF files are used to demonstrate the chatbot's functionality.
 
 ## License
 This project is open-source. Feel free to contribute and improve the code!
 
-```
-
-You can now copy everything in this single cell directly! Let me know if you need anything else.
