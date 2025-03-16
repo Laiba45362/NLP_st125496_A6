@@ -1,4 +1,3 @@
-Certainly! Here's the full `README` content in a single code cell for easy copying:
 
 ```markdown
 # AI Chatbot with FAISS and LangChain
