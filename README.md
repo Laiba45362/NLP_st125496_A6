@@ -23,7 +23,7 @@ Set the Hugging Face API Token in your environment:
 
 ```python
 import os
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = "<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>"
+os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
 ```
 
 ## Code Workflow
@@ -57,7 +57,7 @@ os.environ["HUGGINGFACEHUB_API_TOKEN"] = "<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
 4. Run the Streamlit app to interact with the AI chatbot.
 
 ```bash
-streamlit run <your_script_name>.py
+streamlit run app.py
 ```
 
 ## Code Explanation
