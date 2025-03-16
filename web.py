@@ -9,7 +9,7 @@ from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.llms import HuggingFaceHub
 
 # Set Hugging Face API Token
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
+os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
 # Load the Hugging Face model
 llm = HuggingFaceHub(
     repo_id="google/flan-t5-large",
