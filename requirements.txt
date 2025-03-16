@@ -1,0 +1,8 @@
+treamlit
+langchain
+langchain-community
+pypdf
+sentence-transformers
+faiss-cpu
+huggingface_hub
+numpy
