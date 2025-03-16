@@ -13,75 +13,100 @@ from langchain.llms import HuggingFaceHub
 from langchain.retrievers import BM25Retriever
 from transformers import pipeline
 
-# Set API Token
+# Set up environment variables
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
+
+# Load Hugging Face API Token
 hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
-if not hf_token:
-    st.error("Hugging Face API token not found! Set it in environment variables.")
+if hf_token is None:
+    raise ValueError("HUGGINGFACEHUB_API_TOKEN is not set. Please set it in your environment variables.")
 
-# Load LLM
-hf_llm = HuggingFaceHub(repo_id="google/flan-t5-large", huggingfacehub_api_token=hf_token, model_kwargs={"temperature": 0.7, "max_length": 512})
+# Initialize Hugging Face LLM
+hf_llm = HuggingFaceHub(
+    repo_id="google/flan-t5-large",
+    huggingfacehub_api_token=hf_token,
+    model_kwargs={"temperature": 0.7, "max_length": 512}
+)
 
-# Initialize FAISS index
+# Define FAISS index file path
 INDEX_PATH = "faiss_index.bin"
+
+# Initialize embedding model
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
-def load_pdf_files(uploaded_files):
-    documents = []
-    for file in uploaded_files:
-        loader = PyPDFLoader(file.name)
-        documents.extend(loader.load())
-    return documents
+# Streamlit UI setup
+st.set_page_config(page_title="📜 AI Document Search", layout="wide")
+st.markdown("""
+    <style>
+        body { background-color: #f4f4f4; }
+        .stButton > button { background-color: #4CAF50; color: white; }
+    </style>
+""", unsafe_allow_html=True)
 
-def create_faiss_index(text_chunks):
-    texts = [doc.page_content for doc in text_chunks]
-    embeddings = embedding_model.encode(texts, convert_to_tensor=False)
-    embedding_matrix = np.array(embeddings).astype("float32")
-    index = faiss.IndexFlatL2(embedding_matrix.shape[1])
-    index.add(embedding_matrix)
-    faiss.write_index(index, INDEX_PATH)
-    return index
+st.title("🔍 AI-Powered Document Search")
+st.markdown("Find answers in your documents with AI!")
 
-# Streamlit UI Design
-st.set_page_config(page_title="Smart PDF Search", layout="wide")
-st.markdown("<h1 style='text-align: center; color: #4A90E2;'>Smart NLP Document Search</h1>", unsafe_allow_html=True)
-st.sidebar.header("Upload PDF Documents")
+# Sidebar for settings
+st.sidebar.title("⚙️ Settings")
+st.sidebar.header("📂 Upload PDF Documents")
 
+# File uploader
 uploaded_files = st.sidebar.file_uploader("Choose PDFs", type=["pdf"], accept_multiple_files=True)
+if uploaded_files:
+    pdf_files = [uploaded_file.name for uploaded_file in uploaded_files]
+    for uploaded_file in uploaded_files:
+        with open(uploaded_file.name, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+else:
+    pdf_files = []
 
-documents = load_pdf_files(uploaded_files) if uploaded_files else []
+# Load documents
+documents = []
+for pdf_file in pdf_files:
+    if os.path.exists(pdf_file):
+        loader = PyPDFLoader(pdf_file)
+        documents.extend(loader.load())
+
+# Split documents into chunks
 text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 text_chunks = text_splitter.split_documents(documents)
 
-docstore = InMemoryStore()
-document_objects = [Document(page_content=doc.page_content, metadata={"id": str(i)}) for i, doc in enumerate(text_chunks)]
-docstore.mset([(str(i), doc) for i, doc in enumerate(document_objects)])
+# Convert text to embeddings
+texts = [doc.page_content for doc in text_chunks]
+embeddings = embedding_model.encode(texts, convert_to_tensor=False)
+embedding_matrix = np.array(embeddings).astype("float32")
 
+# Initialize FAISS index
 if os.path.exists(INDEX_PATH):
     index = faiss.read_index(INDEX_PATH)
+    st.sidebar.success("✅ FAISS index loaded from disk.")
 else:
-    index = create_faiss_index(text_chunks)
+    index = faiss.IndexFlatL2(embedding_matrix.shape[1])
+    index.add(embedding_matrix)
+    faiss.write_index(index, INDEX_PATH)
+    st.sidebar.success("✅ FAISS index created.")
 
-vector_store = FAISS(embedding_function=embedding_model.encode, index=index, docstore=docstore, index_to_docstore_id={str(i): str(i) for i in range(len(document_objects))})
+# Setup Retriever
+vector_store = FAISS(
+    embedding_function=embedding_model.encode,
+    index=index,
+    docstore=InMemoryStore(),
+    index_to_docstore_id={str(i): str(i) for i in range(len(text_chunks))}
+)
 retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
 
-def ask_chatbot(question):
-    retrieved_docs = retriever.get_relevant_documents(question)
-    if not retrieved_docs:
-        return "No relevant information found.", []
-    context = "\n\n".join([doc.page_content for doc in retrieved_docs])
-    prompt = f"Answer based on these documents:\n{context}\n\nQuestion: {question}"
-    return hf_llm(prompt), retrieved_docs
-
-st.markdown("### Ask a Question")
-question = st.text_input("Enter your query:")
+# Question Answering UI
+st.header("💡 Ask a Question")
+question = st.text_input("Enter your question:")
 if question:
-    answer, retrieved_docs = ask_chatbot(question)
-    st.markdown("#### Answer")
-    st.write(answer)
-    st.markdown("#### Retrieved Documents")
-    for doc in retrieved_docs:
-        st.write(f"{doc.page_content[:500]}...")
+    retrieved_docs = retriever.get_relevant_documents(question)
+    if retrieved_docs:
+        st.success("✅ Here’s what we found:")
+        for doc in retrieved_docs:
+            st.markdown(f"**📄 Document:** {doc.page_content[:300]}...")
+    else:
+        st.warning("❌ No relevant information found.")
 
+# Footer
 st.markdown("---")
-st.markdown("<p style='text-align: center;'>Created by <a href='https://github.com/Laiba45362'>st125496</a></p>", unsafe_allow_html=True)
+st.markdown("💡 Created by [st125496](https://github.com/Laiba45362) ✨")
